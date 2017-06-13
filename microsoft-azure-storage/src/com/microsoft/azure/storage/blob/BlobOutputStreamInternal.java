@@ -109,7 +109,7 @@ final class BlobOutputStreamInternal extends BlobOutputStream {
     /**
      * A private buffer to store data prior to committing to the cloud.
      */
-    private volatile ByteArrayOutputStream outBuffer;
+    private volatile BlobByteArrayOutputStream outBuffer;
 
     /**
      * Holds the reference to the blob this stream is associated with.
@@ -147,7 +147,7 @@ final class BlobOutputStreamInternal extends BlobOutputStream {
         this.parentBlobRef = parentBlob;
         this.parentBlobRef.assertCorrectBlobType();
         this.options = new BlobRequestOptions(options);
-        this.outBuffer = new ByteArrayOutputStream();
+        this.outBuffer = new BlobByteArrayOutputStream();
         this.opContext = opContext;
 
         if (this.options.getConcurrentRequestCount() < 1) {
@@ -374,7 +374,7 @@ final class BlobOutputStreamInternal extends BlobOutputStream {
             this.clearCompletedFutures();
         }
 
-        final ByteArrayInputStream bufferRef = new ByteArrayInputStream(this.outBuffer.toByteArray());
+        final ByteArrayInputStream bufferRef = this.outBuffer.getInputStream();
 
         if (this.streamType == BlobType.BLOCK_BLOB) {
             final String blockID = this.getCurrentBlockId();
@@ -427,7 +427,7 @@ final class BlobOutputStreamInternal extends BlobOutputStream {
         this.futureSet.add(this.completionService.submit(worker));
         
         // Reset buffer.
-        this.outBuffer = new ByteArrayOutputStream();
+        this.outBuffer = new BlobByteArrayOutputStream();
     }
     
     private void writeBlock(ByteArrayInputStream blockData, String blockId, long writeLength) {
@@ -701,6 +701,25 @@ final class BlobOutputStreamInternal extends BlobOutputStream {
             if (this.outBuffer.size() == this.internalWriteThreshold) {
                 this.dispatchWrite();
             }
+        }
+    }
+
+    static final class BlobByteArrayOutputStream extends ByteArrayOutputStream {
+
+        BlobByteArrayOutputStream() {
+            super();
+        }
+
+        /**
+         * InputStream backed by the internal byte array
+         *
+         * @return ByteArrayInputStream backed by internal array
+         */
+        ByteArrayInputStream getInputStream() {
+            ByteArrayInputStream bin = new ByteArrayInputStream(this.buf, 0, count);
+            this.reset();
+            this.buf = null;
+            return bin;
         }
     }
 }
